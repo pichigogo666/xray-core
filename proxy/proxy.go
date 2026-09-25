@@ -753,9 +753,9 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 			errors.LogDebug(ctx, "CopyRawConn splice")
 			statWriter, _ := writer.(*dispatcher.SizeStatWriter)
 			//runtime.Gosched() // necessary
-			timer.SetTimeout(24 * time.Hour) // prevent leak, just in case
+			timer.SetTimeout(10 * time.Minute) // prevent leak, just in case
 			if inTimer != nil {
-				inTimer.SetTimeout(24 * time.Hour)
+				inTimer.SetTimeout(10 * time.Minute)
 			}
 			w, err := tc.ReadFrom(readerConn)
 			if readCounter != nil {
