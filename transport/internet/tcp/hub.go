@@ -122,14 +122,23 @@ func (v *Listener) keepAccepting() {
 				// that keeps either path silent can otherwise hold both connections
 				// forever because it has not reached the normal inbound policy yet.
 				rawConn := conn
+				handshakeTimeout := time.AfterFunc(10*time.Minute, func() {
+					_ = rawConn.Close()
+				})
 				if err = rawConn.SetDeadline(time.Now().Add(10 * time.Minute)); err != nil {
+					handshakeTimeout.Stop()
 					_ = rawConn.Close()
 					errors.LogInfo(context.Background(), "failed to set REALITY handshake deadline: ", err)
 					return
 				}
 				if conn, err = reality.Server(conn, v.realityConfig); err != nil {
+					handshakeTimeout.Stop()
 					_ = rawConn.Close()
 					errors.LogInfo(context.Background(), err.Error())
+					return
+				}
+				if !handshakeTimeout.Stop() {
+					_ = conn.Close()
 					return
 				}
 				if err = conn.SetDeadline(time.Time{}); err != nil {
