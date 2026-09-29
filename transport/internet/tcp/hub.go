@@ -117,8 +117,24 @@ func (v *Listener) keepAccepting() {
 			if v.tlsConfig != nil {
 				conn = tls.Server(conn, v.tlsConfig)
 			} else if v.realityConfig != nil {
+				// REALITY.Server performs the authenticated handshake and also
+				// forwards unauthenticated traffic to the camouflage target. A peer
+				// that keeps either path silent can otherwise hold both connections
+				// forever because it has not reached the normal inbound policy yet.
+				rawConn := conn
+				if err = rawConn.SetDeadline(time.Now().Add(10 * time.Minute)); err != nil {
+					_ = rawConn.Close()
+					errors.LogInfo(context.Background(), "failed to set REALITY handshake deadline: ", err)
+					return
+				}
 				if conn, err = reality.Server(conn, v.realityConfig); err != nil {
+					_ = rawConn.Close()
 					errors.LogInfo(context.Background(), err.Error())
+					return
+				}
+				if err = conn.SetDeadline(time.Time{}); err != nil {
+					_ = conn.Close()
+					errors.LogInfo(context.Background(), "failed to clear REALITY handshake deadline: ", err)
 					return
 				}
 			}
