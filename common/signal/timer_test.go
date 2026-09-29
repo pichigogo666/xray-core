@@ -58,3 +58,20 @@ func TestActivityTimerZeroTimeout(t *testing.T) {
 	}
 	runtime.KeepAlive(timer)
 }
+
+func TestActivityTimerDisableAndReenable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	timer := CancelAfterInactivity(ctx, cancel, 40*time.Millisecond)
+	timer.Disable()
+	time.Sleep(100 * time.Millisecond)
+	if ctx.Err() != nil {
+		t.Fatal("disabled timer canceled its context")
+	}
+
+	timer.SetTimeout(20 * time.Millisecond)
+	time.Sleep(60 * time.Millisecond)
+	if ctx.Err() == nil {
+		t.Fatal("re-enabled timer did not cancel its context")
+	}
+	runtime.KeepAlive(timer)
+}

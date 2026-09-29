@@ -75,6 +75,32 @@ func (t *ActivityTimer) SetTimeout(timeout time.Duration) {
 	common.Must(newCheckTask.Start())
 }
 
+// Disable pauses inactivity checks without consuming the timer. A later
+// SetTimeout call can enable the timer again. This is used by copy paths that
+// provide their own activity tracking while a blocking kernel operation is in
+// progress.
+func (t *ActivityTimer) Disable() {
+	if t == nil || t.consumed.Load() {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.consumed.Load() {
+		return
+	}
+
+	common.CloseIfExists(t.checkTask)
+	t.checkTask = nil
+	for {
+		select {
+		case <-t.updated:
+		default:
+			return
+		}
+	}
+}
+
 func CancelAfterInactivity(ctx context.Context, cancel context.CancelFunc, timeout time.Duration) *ActivityTimer {
 	timer := &ActivityTimer{
 		updated:   make(chan struct{}, 1),

@@ -753,10 +753,16 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 			errors.LogDebug(ctx, "CopyRawConn splice")
 			statWriter, _ := writer.(*dispatcher.SizeStatWriter)
 			//runtime.Gosched() // necessary
-			timer.SetTimeout(10 * time.Minute) // prevent leak, just in case
+			// net.TCPConn.ReadFrom performs the transfer inside the kernel, so the
+			// regular ActivityTimer cannot see individual reads or writes. Pause it
+			// and use TCP_INFO byte counters to enforce a true idle timeout without
+			// disabling zero-copy or disconnecting active sessions.
+			timer.Disable()
 			if inTimer != nil {
-				inTimer.SetTimeout(10 * time.Minute)
+				inTimer.Disable()
 			}
+			stopIdleWatcher := watchSpliceIdle(ctx, readerConn, writerConn, 10*time.Minute)
+			defer stopIdleWatcher()
 			w, err := tc.ReadFrom(readerConn)
 			if readCounter != nil {
 				readCounter.Add(w) // outbound stats
