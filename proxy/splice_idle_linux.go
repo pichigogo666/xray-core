@@ -124,3 +124,9 @@ func watchSpliceIdle(ctx context.Context, readerConn stdnet.Conn, writerConn std
 	}()
 	return stop
 }
+
+// WatchTCPIdle enforces an activity-based timeout using the kernel TCP byte
+// counters. It is suitable for both splice and regular buffered copy paths.
+func WatchTCPIdle(ctx context.Context, readerConn stdnet.Conn, writerConn stdnet.Conn, timeout time.Duration) func() {
+	return watchSpliceIdle(ctx, readerConn, writerConn, timeout)
+}

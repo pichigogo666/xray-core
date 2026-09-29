@@ -428,6 +428,10 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 				return errors.New("failed to dial to " + fb.Dest).Base(err).AtWarning()
 			}
 			defer conn.Close()
+			outboundRaw, _, _ := proxy.UnwrapRawConn(conn)
+			inboundRaw, _, _ := proxy.UnwrapRawConn(connection)
+			stopTCPIdleWatcher := proxy.WatchTCPIdle(ctx, outboundRaw, inboundRaw, sessionPolicy.Timeouts.ConnectionIdle)
+			defer stopTCPIdleWatcher()
 
 			serverReader := buf.NewReader(conn)
 			serverWriter := buf.NewWriter(conn)

@@ -403,6 +403,17 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	timer := signal.CancelAfterInactivity(ctx, func() {
 		cancelIdleConnection(ctx, cancel, newCancel)
 	}, plcy.Timeouts.ConnectionIdle)
+	stopTCPIdleWatcher := func() {}
+	if destination.Network == net.Network_TCP {
+		outboundRaw, _, _ := proxy.UnwrapRawConn(conn)
+		if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.Conn != nil {
+			inboundRaw, _, _ := proxy.UnwrapRawConn(inbound.Conn)
+			if outboundRaw != nil && inboundRaw != nil {
+				stopTCPIdleWatcher = proxy.WatchTCPIdle(ctx, outboundRaw, inboundRaw, plcy.Timeouts.ConnectionIdle)
+			}
+		}
+	}
+	defer stopTCPIdleWatcher()
 
 	requestDone := func() error {
 		defer timer.SetTimeout(plcy.Timeouts.DownlinkOnly)
