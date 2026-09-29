@@ -38,6 +38,21 @@ var (
 	defaultBlockAllRule     *FinalRule
 )
 
+func cancelIdleConnection(ctx context.Context, cancel context.CancelFunc, extraCancel context.CancelFunc) {
+	cancel()
+	if extraCancel != nil {
+		extraCancel()
+	}
+
+	// Cancelling the copy tasks alone does not necessarily wake a goroutine
+	// blocked in a transport read. Expire and close the original inbound socket
+	// as well so an idle Reality/VLESS session cannot retain its descriptors.
+	if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.Conn != nil {
+		_ = inbound.Conn.SetDeadline(time.Now())
+		_ = inbound.Conn.Close()
+	}
+}
+
 func reloadEnvSettings() error {
 	const defaultFlagValue = "NOT_DEFINED_AT_ALL"
 	value := platform.NewEnvFlag(platform.UseFreedomSplice).GetValue(func() string { return defaultFlagValue })
@@ -386,10 +401,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	plcy := h.policy()
 	ctx, cancel := context.WithCancel(ctx)
 	timer := signal.CancelAfterInactivity(ctx, func() {
-		cancel()
-		if newCancel != nil {
-			newCancel()
-		}
+		cancelIdleConnection(ctx, cancel, newCancel)
 	}, plcy.Timeouts.ConnectionIdle)
 
 	requestDone := func() error {
