@@ -35,6 +35,17 @@ func TestApplyTrustedXForwardedFor(t *testing.T) {
 		}
 	})
 
+	t.Run("prefer Cloudflare connecting IP over spoofed X-Forwarded-For", func(t *testing.T) {
+		header := http.Header{}
+		header.Add("X-Forwarded-For", "198.51.100.9, 129.78.138.66")
+		header.Add("CF-Connecting-IP", "203.0.113.42")
+
+		addr := ApplyTrustedXForwardedFor(header, []string{"CF-Connecting-IP"}, remoteAddr)
+		if addr.String() != "203.0.113.42:0" {
+			t.Fatalf("unexpected remote address: %v", addr)
+		}
+	})
+
 	t.Run("ignore non-IP X-Forwarded-For", func(t *testing.T) {
 		header := http.Header{}
 		header.Add("X-Forwarded-For", "example.com")

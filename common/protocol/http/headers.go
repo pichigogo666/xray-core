@@ -13,11 +13,16 @@ import (
 // ApplyTrustedXForwardedFor returns remoteAddr overridden by X-Forwarded-For only when a configured trusted header is present.
 func ApplyTrustedXForwardedFor(header http.Header, trusted []string, remoteAddr net.Addr) net.Addr {
 	value := header.Get("X-Forwarded-For")
-	if value == "" {
-		return remoteAddr
-	}
 	for _, t := range trusted {
 		if len(header.Values(t)) > 0 {
+			// Cloudflare's CF-Connecting-IP is authoritative for the viewer IP.
+			// Prefer it over the potentially multi-hop or client-supplied XFF chain.
+			if strings.EqualFold(t, "CF-Connecting-IP") {
+				value = header.Get(t)
+			}
+			if value == "" {
+				return remoteAddr
+			}
 			if idx := strings.IndexByte(value, ','); idx >= 0 {
 				value = value[:idx]
 			}
@@ -29,6 +34,9 @@ func ApplyTrustedXForwardedFor(header http.Header, trusted []string, remoteAddr 
 			}
 			return remoteAddr
 		}
+	}
+	if value == "" {
+		return remoteAddr
 	}
 	if len(trusted) == 0 {
 		errors.LogWarning(context.Background(), `received "X-Forwarded-For" from `, remoteAddr, ` but "sockopt.trustedXForwardedFor" is not configured; ignoring it and using the real remote address`)
